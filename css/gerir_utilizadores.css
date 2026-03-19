@@ -1,0 +1,129 @@
+ /* ── PROFESSOR CARDS ── */
+  .prof-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 22px 24px;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-start;
+    gap: 18px;
+  }
+
+  .prof-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 3px;
+    background: linear-gradient(90deg, var(--gold), transparent);
+    opacity: 0; transition: opacity 0.3s;
+  }
+
+  .prof-card:hover {
+    border-color: rgba(201,168,76,0.2);
+    transform: translateY(-3px);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.3);
+  }
+
+  .prof-card:hover::before { opacity: 1; }
+
+  /* Avatar do professor */
+  .prof-avatar {
+    width: 50px; height: 50px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--navy-light), var(--navy-mid));
+    border: 2px solid rgba(201,168,76,0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Playfair Display', serif;
+    font-size: 18px; font-weight: 700; color: var(--gold);
+    flex-shrink: 0;
+  }
+
+  .prof-info { flex: 1; min-width: 0; }
+
+  .prof-nome {
+    font-family: 'Playfair Display', serif;
+    font-size: 17px; font-weight: 700; color: var(--cream);
+    margin-bottom: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .prof-email {
+    font-size: 12px; color: var(--muted);
+    margin-bottom: 12px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* Chips de disciplinas */
+  .disc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .disc-chip {
+    background: rgba(201,168,76,0.08);
+    border: 1px solid rgba(201,168,76,0.2);
+    border-radius: 20px; padding: 3px 10px;
+    font-size: 11px; color: var(--gold);
+    white-space: nowrap;
+  }
+
+  .disc-chip.empty {
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.1);
+    color: var(--muted);
+  }
+
+  /* Ações do card */
+  .prof-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  /* Grid checkboxes disciplinas */
+  .disc-check-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .disc-check-item {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; padding: 10px 12px;
+    cursor: pointer; transition: all 0.2s;
+    font-size: 13px; color: var(--muted);
+    user-select: none;
+  }
+
+  .disc-check-item:has(input:checked) {
+    background: rgba(201,168,76,0.1);
+    border-color: rgba(201,168,76,0.3);
+    color: var(--cream);
+  }
+
+  .disc-check-item input[type="checkbox"] {
+    accent-color: var(--gold);
+    width: 15px; height: 15px; flex-shrink: 0;
+  }
+
+  .disc-check-grid::-webkit-scrollbar { width: 4px; }
+  .disc-check-grid::-webkit-scrollbar-track { background: transparent; }
+  .disc-check-grid::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.2); border-radius: 4px; }
+
+  /* Password hint */
+  .pwd-hint {
+    font-size: 11px; color: var(--muted);
+    margin-top: 6px; display: flex; align-items: center; gap: 4px;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--muted);
+  }
+
+  .empty-state i { font-size: 48px; opacity: 0.25; display: block; margin-bottom: 16px; }
+  .empty-state p { font-size: 14px; }
