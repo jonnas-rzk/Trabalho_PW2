@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ── CRIAR CURSO
     if ($acao === 'criar_curso') {
-        $nome = trim($_POST['nome_curso']);
+        $nome  = trim($_POST['nome_curso'] ?? '');
         $discs = $_POST['disciplinas'] ?? [];
 
         if (empty($nome)) {
@@ -24,25 +24,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $check = $conn->prepare("SELECT ID FROM cursos WHERE Nome = ?");
             $check->bind_param("s", $nome);
             $check->execute();
+
             if ($check->get_result()->num_rows > 0) {
                 $msg = "Já existe um curso com esse nome.";
                 $msg_tipo = "erro";
             } else {
                 $stmt = $conn->prepare("INSERT INTO cursos (Nome) VALUES (?)");
                 $stmt->bind_param("s", $nome);
+
                 if ($stmt->execute()) {
                     $curso_id = $conn->insert_id;
+
                     if (!empty($discs)) {
                         $sp = $conn->prepare("INSERT INTO plano_estudos (CURSOS, DISCIPLINA) VALUES (?, ?)");
                         foreach ($discs as $d) {
-                            $sp->bind_param("ii", $curso_id, $d);
+                            $did = (int)$d;
+                            $sp->bind_param("ii", $curso_id, $did);
                             $sp->execute();
                         }
                     }
+
                     $msg = "Curso \"$nome\" criado com sucesso!";
                     $msg_tipo = "sucesso";
                 } else {
-                    $msg = "Erro ao criar curso."; $msg_tipo = "erro";
+                    $msg = "Erro ao criar curso.";
+                    $msg_tipo = "erro";
                 }
             }
         }
@@ -50,47 +56,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ── EDITAR CURSO
     if ($acao === 'editar_curso') {
-        $id   = (int)$_POST['curso_id'];
-        $nome = trim($_POST['nome_curso']);
+        $id    = (int)($_POST['curso_id'] ?? 0);
+        $nome  = trim($_POST['nome_curso'] ?? '');
         $discs = $_POST['disciplinas'] ?? [];
 
-        $stmt = $conn->prepare("UPDATE cursos SET Nome=? WHERE ID=?");
-        $stmt->bind_param("si", $nome, $id);
-        if ($stmt->execute()) {
-            // Limpa e reinsere disciplinas
-            $conn->prepare("DELETE FROM plano_estudos WHERE CURSOS=?")->bind_param("i", $id) && true;
-            $del = $conn->prepare("DELETE FROM plano_estudos WHERE CURSOS=?");
-            $del->bind_param("i", $id);
-            $del->execute();
-
-            if (!empty($discs)) {
-                $sp = $conn->prepare("INSERT INTO plano_estudos (CURSOS, DISCIPLINA) VALUES (?, ?)");
-                foreach ($discs as $d) {
-                    $sp->bind_param("ii", $id, $d);
-                    $sp->execute();
-                }
-            }
-            $msg = "Curso atualizado com sucesso."; $msg_tipo = "sucesso";
+        if (empty($nome)) {
+            $msg = "O nome do curso não pode ficar vazio.";
+            $msg_tipo = "erro";
+        } elseif ($id <= 0) {
+            $msg = "Curso inválido.";
+            $msg_tipo = "erro";
         } else {
-            $msg = "Erro ao atualizar."; $msg_tipo = "erro";
+            // Atualizar nome
+            $stmt = $conn->prepare("UPDATE cursos SET Nome = ? WHERE ID = ?");
+            $stmt->bind_param("si", $nome, $id);
+
+            if ($stmt->execute()) {
+                // Apagar disciplinas antigas
+                $del = $conn->prepare("DELETE FROM plano_estudos WHERE CURSOS = ?");
+                $del->bind_param("i", $id);
+                $del->execute();
+
+                // Inserir disciplinas novas
+                if (!empty($discs)) {
+                    $sp = $conn->prepare("INSERT INTO plano_estudos (CURSOS, DISCIPLINA) VALUES (?, ?)");
+                    foreach ($discs as $d) {
+                        $did = (int)$d;
+                        $sp->bind_param("ii", $id, $did);
+                        $sp->execute();
+                    }
+                }
+
+                $msg = "Curso atualizado com sucesso.";
+                $msg_tipo = "sucesso";
+            } else {
+                $msg = "Erro ao atualizar o curso.";
+                $msg_tipo = "erro";
+            }
         }
     }
 
     // ── ELIMINAR CURSO
     if ($acao === 'eliminar_curso') {
-        $id = (int)$_POST['curso_id'];
-        $conn->prepare("DELETE FROM plano_estudos WHERE CURSOS=?")->bind_param("i", $id) && true;
-        $del_pe = $conn->prepare("DELETE FROM plano_estudos WHERE CURSOS=?");
-        $del_pe->bind_param("i", $id); $del_pe->execute();
-        $del_c = $conn->prepare("DELETE FROM cursos WHERE ID=?");
-        $del_c->bind_param("i", $id);
-        $msg = $del_c->execute() ? "Curso eliminado." : "Erro ao eliminar.";
-        $msg_tipo = $del_c->execute() ? "sucesso" : "erro";
+        $id = (int)($_POST['curso_id'] ?? 0);
+
+        if ($id > 0) {
+            $del_pe = $conn->prepare("DELETE FROM plano_estudos WHERE CURSOS = ?");
+            $del_pe->bind_param("i", $id);
+            $del_pe->execute();
+
+            $del_c = $conn->prepare("DELETE FROM cursos WHERE ID = ?");
+            $del_c->bind_param("i", $id);
+
+            if ($del_c->execute()) {
+                $msg = "Curso eliminado com sucesso.";
+                $msg_tipo = "sucesso";
+            } else {
+                $msg = "Erro ao eliminar o curso.";
+                $msg_tipo = "erro";
+            }
+        }
     }
 }
 
 // ══ BUSCAR DADOS ══
-// Cursos com contagem de disciplinas e alunos
 $cursos_result = $conn->query("
     SELECT c.ID, c.Nome,
            COUNT(DISTINCT pe.DISCIPLINA) AS num_disciplinas,
@@ -102,21 +131,20 @@ $cursos_result = $conn->query("
     ORDER BY c.Nome ASC
 ");
 
-// Todas as disciplinas
 $discs_result = $conn->query("SELECT ID, Nome_disc FROM disciplinas ORDER BY Nome_disc ASC");
-$todas_disc = [];
+$todas_disc   = [];
 while ($d = $discs_result->fetch_assoc()) $todas_disc[] = $d;
 
-// Mapa: curso_id => [disc_ids]
-$plano_map = [];
+$plano_map  = [];
 $plano_rows = $conn->query("SELECT CURSOS, DISCIPLINA FROM plano_estudos");
 while ($p = $plano_rows->fetch_assoc()) {
-    $plano_map[$p['CURSOS']][] = $p['DISCIPLINA'];
+    $plano_map[$p['CURSOS']][] = (int)$p['DISCIPLINA'];
 }
 
-// Total candidaturas (badge sidebar)
-$total_cand = $conn->query("SELECT COUNT(*) as n FROM candidaturas")->fetch_assoc()['n'];
+$total_cand   = $conn->query("SELECT COUNT(*) as n FROM candidaturas")->fetch_assoc()['n'];
 $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()['n'];
+$total_cursos = $cursos_result->num_rows;
+$total_discs  = count($todas_disc);
 ?>
 <!DOCTYPE html>
 <html lang="pt-PT">
@@ -130,8 +158,6 @@ $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()[
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/dashboard.css">
 <link rel="stylesheet" href="css/adicionar_curso.css">
-
-
 </head>
 <body>
 
@@ -148,30 +174,31 @@ $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()[
   <div class="sidebar-section">Principal</div>
   <a href="dashboard_admin.php" class="sidebar-link">
     <i class="bi bi-people"></i> Candidaturas
-  
   </a>
   <a href="lista_alunos.php" class="sidebar-link">
     <i class="bi bi-mortarboard"></i> Alunos Ativos
-
   </a>
   <a href="adicionar_curso.php" class="sidebar-link active">
     <i class="bi bi-book"></i> Cursos
   </a>
 
-
-
   <?php if ($_SESSION['tipo'] === 'admin'): ?>
   <div class="sidebar-section">Administração</div>
-  <a href="gerir_utilizadores.php" class="sidebar-link"><i class="bi bi-people-fill"></i> Utilizadores</a>
-
+  <a href="gerir_utilizadores.php" class="sidebar-link">
+    <i class="bi bi-people-fill"></i> Utilizadores
+  </a>
   <?php endif; ?>
 
   <div class="sidebar-bottom">
     <div class="sidebar-user">
       <div class="sidebar-avatar"><?php echo strtoupper(substr($_SESSION['usuario'], 0, 1)); ?></div>
       <div style="overflow:hidden;">
-        <div style="font-size:13px;color:var(--cream);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?php echo $_SESSION['usuario']; ?></div>
-        <div style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:1px;"><?php echo ucfirst($_SESSION['tipo']); ?></div>
+        <div style="font-size:13px;color:var(--cream);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          <?php echo htmlspecialchars($_SESSION['usuario']); ?>
+        </div>
+        <div style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:1px;">
+          <?php echo ucfirst($_SESSION['tipo']); ?>
+        </div>
       </div>
     </div>
     <a href="logout.php" class="sidebar-link" style="color:#e74c3c;">
@@ -195,18 +222,17 @@ $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()[
         <div class="topbar-breadcrumb">IPCA › <span>Admin</span> › Cursos</div>
       </div>
     </div>
-
-       <div class="topbar-actions">
+    <div class="topbar-actions">
       <div class="session-pill">
         <div class="session-dot"></div>
-        <span style="font-size:12px; color:var(--gold); font-weight:500;">Sessão Ativa</span>
+        <span style="font-size:12px;color:var(--gold);font-weight:500;">Sessão Ativa</span>
       </div>
     </div>
   </div>
 
   <!-- TOAST -->
   <?php if ($msg): ?>
-  <div class="toast-wrap">
+  <div class="toast-wrap" id="toastWrap">
     <div class="toast-custom toast-<?php echo $msg_tipo === 'sucesso' ? 'success' : 'error'; ?>">
       <i class="bi bi-<?php echo $msg_tipo === 'sucesso' ? 'check-circle-fill' : 'x-circle-fill'; ?>"></i>
       <div><?php echo htmlspecialchars($msg); ?></div>
@@ -219,10 +245,6 @@ $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()[
   <div class="page-content">
 
     <!-- STAT CARDS -->
-    <?php
-      $total_cursos = $cursos_result->num_rows;
-      $total_discs  = count($todas_disc);
-    ?>
     <div class="row g-3 mb-4">
       <div class="col-6 col-md-3">
         <div class="stat-card" style="--card-color:#c9a84c;--card-rgb:201,168,76">
@@ -254,7 +276,7 @@ $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()[
       </div>
     </div>
 
-    <!-- HEADER SECTION -->
+    <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
       <div>
         <p class="mb-0" style="font-size:11px;color:var(--gold);letter-spacing:2px;text-transform:uppercase;">Oferta Formativa</p>
@@ -272,12 +294,10 @@ $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()[
       <?php
         $cursos_result->data_seek(0);
         while ($curso = $cursos_result->fetch_assoc()):
-          $disc_ids = $plano_map[$curso['ID']] ?? [];
-          // Buscar nomes das disciplinas deste curso
-          $disc_nomes = array_filter($todas_disc, fn($d) => in_array($d['ID'], $disc_ids));
+          $disc_ids   = $plano_map[$curso['ID']] ?? [];
+          $disc_nomes = array_filter($todas_disc, fn($d) => in_array((int)$d['ID'], $disc_ids));
       ?>
-      <div class="col-md-6 col-xl-4"
-           data-nome="<?php echo strtolower($curso['Nome']); ?>">
+      <div class="col-md-6 col-xl-4">
         <div class="curso-card">
 
           <div class="curso-nome"><?php echo htmlspecialchars($curso['Nome']); ?></div>
@@ -305,17 +325,15 @@ $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()[
 
           <div class="curso-actions">
             <button class="action-btn action-view" style="flex:1;width:auto;padding:6px 0;"
-                    title="Editar curso"
                     onclick="abrirEditar(
                       <?php echo $curso['ID']; ?>,
                       '<?php echo addslashes($curso['Nome']); ?>',
-                      <?php echo json_encode($disc_ids); ?>
+                      <?php echo json_encode(array_values($disc_ids)); ?>
                     )">
               <i class="bi bi-pencil me-1"></i> Editar
             </button>
             <?php if ($_SESSION['tipo'] === 'admin'): ?>
             <button class="action-btn action-delete" style="flex:1;width:auto;padding:6px 0;"
-                    title="Eliminar curso"
                     onclick="abrirEliminar(<?php echo $curso['ID']; ?>, '<?php echo addslashes($curso['Nome']); ?>')">
               <i class="bi bi-trash me-1"></i> Eliminar
             </button>
@@ -338,7 +356,7 @@ $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()[
 </div><!-- /main-wrap -->
 
 
-<!-- ════════ MODAL CRIAR CURSO ════════ -->
+<!-- ════════ MODAL CRIAR ════════ -->
 <div class="modal-overlay" id="modalCriar" onclick="fecharModal('modalCriar')">
   <div class="modal-box" onclick="event.stopPropagation()">
     <div class="modal-header-custom">
@@ -348,15 +366,12 @@ $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()[
       </div>
       <button class="modal-close" onclick="fecharModal('modalCriar')"><i class="bi bi-x-lg"></i></button>
     </div>
-
     <form method="POST">
       <input type="hidden" name="acao" value="criar_curso">
-
       <div class="modal-field">
         <label class="field-label-m">Nome do Curso</label>
         <input type="text" name="nome_curso" class="field-input-m" placeholder="Ex: Engenharia Informática" required>
       </div>
-
       <div class="modal-field">
         <label class="field-label-m">Disciplinas do Plano de Estudos</label>
         <div class="disc-check-grid">
@@ -368,19 +383,16 @@ $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()[
           <?php endforeach; ?>
         </div>
       </div>
-
       <div class="modal-actions">
         <button type="button" class="btn-modal-cancel" onclick="fecharModal('modalCriar')">Cancelar</button>
-        <button type="submit" class="btn-modal-confirm">
-          <i class="bi bi-plus-lg me-1"></i>Criar Curso
-        </button>
+        <button type="submit" class="btn-modal-confirm"><i class="bi bi-plus-lg me-1"></i>Criar Curso</button>
       </div>
     </form>
   </div>
 </div>
 
 
-<!-- ════════ MODAL EDITAR CURSO ════════ -->
+<!-- ════════ MODAL EDITAR ════════ -->
 <div class="modal-overlay" id="modalEditar" onclick="fecharModal('modalEditar')">
   <div class="modal-box" onclick="event.stopPropagation()">
     <div class="modal-header-custom">
@@ -390,22 +402,20 @@ $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()[
       </div>
       <button class="modal-close" onclick="fecharModal('modalEditar')"><i class="bi bi-x-lg"></i></button>
     </div>
-
     <form method="POST">
       <input type="hidden" name="acao" value="editar_curso">
       <input type="hidden" name="curso_id" id="edit_curso_id">
-
       <div class="modal-field">
         <label class="field-label-m">Nome do Curso</label>
         <input type="text" name="nome_curso" id="edit_nome_curso" class="field-input-m" required>
       </div>
-
       <div class="modal-field">
         <label class="field-label-m">Disciplinas</label>
-        <div class="disc-check-grid" id="edit_disc_grid">
+        <div class="disc-check-grid">
           <?php foreach ($todas_disc as $d): ?>
           <label class="disc-check-item">
-            <input type="checkbox" name="disciplinas[]"
+            <input type="checkbox"
+                   name="disciplinas[]"
                    value="<?php echo $d['ID']; ?>"
                    class="edit-disc-check"
                    data-id="<?php echo $d['ID']; ?>">
@@ -414,12 +424,9 @@ $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()[
           <?php endforeach; ?>
         </div>
       </div>
-
       <div class="modal-actions">
         <button type="button" class="btn-modal-cancel" onclick="fecharModal('modalEditar')">Cancelar</button>
-        <button type="submit" class="btn-modal-confirm">
-          <i class="bi bi-check-lg me-1"></i>Guardar Alterações
-        </button>
+        <button type="submit" class="btn-modal-confirm"><i class="bi bi-check-lg me-1"></i>Guardar Alterações</button>
       </div>
     </form>
   </div>
@@ -436,24 +443,19 @@ $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()[
       </div>
       <button class="modal-close" onclick="fecharModal('modalEliminar')"><i class="bi bi-x-lg"></i></button>
     </div>
-
     <p style="color:var(--muted);font-size:14px;margin-bottom:8px;">
-      Tens a certeza que queres eliminar o curso
-      <strong id="del_nome_curso" style="color:var(--cream);"></strong>?
+      Tens a certeza que queres eliminar o curso <strong id="del_nome_curso" style="color:var(--cream);"></strong>?
     </p>
     <p style="color:#e74c3c;font-size:12px;margin-bottom:24px;">
       <i class="bi bi-exclamation-triangle me-1"></i>
       As disciplinas associadas no plano de estudos também serão removidas.
     </p>
-
     <form method="POST">
       <input type="hidden" name="acao" value="eliminar_curso">
       <input type="hidden" name="curso_id" id="del_curso_id">
       <div class="modal-actions">
         <button type="button" class="btn-modal-cancel" onclick="fecharModal('modalEliminar')">Cancelar</button>
-        <button type="submit" class="btn-modal-danger">
-          <i class="bi bi-trash me-1"></i>Eliminar Curso
-        </button>
+        <button type="submit" class="btn-modal-danger"><i class="bi bi-trash me-1"></i>Eliminar Curso</button>
       </div>
     </form>
   </div>
@@ -469,10 +471,13 @@ $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()[
   function abrirEditar(id, nome, discIds) {
     document.getElementById('edit_curso_id').value   = id;
     document.getElementById('edit_nome_curso').value = nome;
-    // Marcar checkboxes corretas
+
+    // Converter para array de números e marcar checkboxes
+    const ids = discIds.map(Number);
     document.querySelectorAll('.edit-disc-check').forEach(cb => {
-      cb.checked = discIds.includes(parseInt(cb.dataset.id));
+      cb.checked = ids.includes(parseInt(cb.dataset.id));
     });
+
     document.getElementById('modalEditar').classList.add('open');
   }
 
@@ -490,6 +495,12 @@ $total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()[
     if (e.key === 'Escape')
       document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
   });
+
+  // Auto-dismiss toast
+  setTimeout(() => {
+    const tw = document.getElementById('toastWrap');
+    if (tw) { tw.style.opacity = '0'; tw.style.transition = 'opacity 0.4s'; setTimeout(() => tw?.remove(), 400); }
+  }, 4000);
 
   // Sidebar mobile
   document.addEventListener('click', function(e) {

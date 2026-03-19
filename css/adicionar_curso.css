@@ -1,92 +1,106 @@
-  .curso-card {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 14px; padding: 24px;
-    transition: all 0.3s; position: relative; overflow: hidden;
-    height: 100%;
-  }
+/* ═══════════════════════════════════════════
+   IPCA — adicionar_curso.css
+   Estilos para cards de curso e checkboxes
+   de disciplinas (usado em gerir_cursos /
+   adicionar_curso)
+═══════════════════════════════════════════ */
 
-  .curso-card::before {
-    content: ''; position: absolute; top: 0; left: 0;
-    width: 100%; height: 3px;
-    background: linear-gradient(90deg, var(--gold), transparent);
-    opacity: 0; transition: opacity 0.3s;
-  }
+/* ── CURSO CARD ── */
+.curso-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px; padding: 24px;
+  transition: all 0.3s; position: relative; overflow: hidden;
+  height: 100%; display: flex; flex-direction: column;
+}
 
-  .curso-card:hover {
-    border-color: rgba(201,168,76,0.25);
-    transform: translateY(-3px);
-    box-shadow: 0 16px 48px rgba(0,0,0,0.3);
-  }
+.curso-card::before {
+  content: ''; position: absolute; top: 0; left: 0;
+  width: 100%; height: 3px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  opacity: 0; transition: opacity 0.3s;
+}
 
-  .curso-card:hover::before { opacity: 1; }
+.curso-card:hover {
+  border-color: rgba(201,168,76,0.25);
+  transform: translateY(-3px);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.3);
+}
 
-  .curso-nome {
-    font-family: 'Playfair Display', serif;
-    font-size: 17px; font-weight: 700; color: var(--cream);
-    line-height: 1.3; margin-bottom: 14px;
-  }
+.curso-card:hover::before { opacity: 1; }
 
-  .curso-meta {
-    display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;
-  }
+.curso-nome {
+  font-family: 'Playfair Display', serif;
+  font-size: 17px; font-weight: 700; color: var(--cream);
+  line-height: 1.3; margin-bottom: 14px;
+}
 
-  .curso-meta-item {
-    display: flex; align-items: center; gap: 5px;
-    font-size: 12px; color: var(--muted);
-  }
+.curso-meta {
+  display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;
+}
 
-  .curso-meta-item i { color: var(--gold); font-size: 13px; }
+.curso-meta-item {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--muted);
+}
 
-  .disc-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.curso-meta-item i { color: var(--gold); font-size: 13px; }
 
-  .disc-chip {
-    background: rgba(201,168,76,0.08);
-    border: 1px solid rgba(201,168,76,0.2);
-    border-radius: 20px; padding: 3px 10px;
-    font-size: 11px; color: var(--gold);
-  }
+/* ── DISCIPLINE CHIPS ── */
+.disc-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-bottom: 16px; flex: 1;
+}
 
-  .disc-chip.empty {
-    background: rgba(255,255,255,0.04);
-    border-color: rgba(255,255,255,0.1);
-    color: var(--muted);
-  }
+.disc-chip {
+  background: rgba(201,168,76,0.08);
+  border: 1px solid rgba(201,168,76,0.2);
+  border-radius: 20px; padding: 3px 10px;
+  font-size: 11px; color: var(--gold);
+}
 
-  .curso-actions {
-    display: flex; gap: 8px;
-    padding-top: 14px;
-    border-top: 1px solid rgba(255,255,255,0.06);
-  }
+.disc-chip.empty {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.1);
+  color: var(--muted);
+}
 
-  /* Checkboxes disciplinas no modal */
-  .disc-check-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-    max-height: 220px; overflow-y: auto; padding-right: 4px;
-  }
+/* ── COURSE ACTIONS ── */
+.curso-actions {
+  display: flex; gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  margin-top: auto;
+}
 
-  .disc-check-item {
-    display: flex; align-items: center; gap: 8px;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 8px; padding: 10px 12px;
-    cursor: pointer; transition: all 0.2s;
-    font-size: 13px; color: var(--muted);
-    user-select: none;
-  }
+/* ── DISCIPLINE CHECKBOX GRID (modal) ── */
+.disc-check-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  max-height: 240px; overflow-y: auto; padding-right: 4px;
+}
 
-  .disc-check-item:has(input:checked) {
-    background: rgba(201,168,76,0.1);
-    border-color: rgba(201,168,76,0.3);
-    color: var(--cream);
-  }
+.disc-check-item {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px; padding: 10px 12px;
+  cursor: pointer; transition: all 0.2s;
+  font-size: 13px; color: var(--muted);
+  user-select: none;
+}
 
-  .disc-check-item input[type="checkbox"] {
-    accent-color: var(--gold);
-    width: 15px; height: 15px; flex-shrink: 0;
-  }
+.disc-check-item:has(input:checked) {
+  background: rgba(201,168,76,0.1);
+  border-color: rgba(201,168,76,0.3);
+  color: var(--cream);
+}
 
-  /* Scrollbar thin */
-  .disc-check-grid::-webkit-scrollbar { width: 4px; }
-  .disc-check-grid::-webkit-scrollbar-track { background: transparent; }
-  .disc-check-grid::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.2); border-radius: 4px; }
+.disc-check-item input[type="checkbox"] {
+  accent-color: var(--gold);
+  width: 15px; height: 15px; flex-shrink: 0;
+}
+
+/* Scrollbar */
+.disc-check-grid::-webkit-scrollbar { width: 4px; }
+.disc-check-grid::-webkit-scrollbar-track { background: transparent; }
+.disc-check-grid::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.2); border-radius: 4px; }
