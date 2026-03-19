@@ -29,23 +29,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // Verificar email duplicado
             $chk = $conn->prepare("SELECT id FROM professores WHERE email = ?");
-            $chk->bind_param("s", $email);
-            $chk->execute();
-            if ($chk->get_result()->num_rows > 0) {
+            $chk->execute([$email]);
+            if ($chk->fetch()) {
                 $msg = "Já existe um professor com esse email.";
                 $msg_tipo = "erro";
             } else {
                 $hash = password_hash($senha, PASSWORD_BCRYPT);
                 $stmt = $conn->prepare("INSERT INTO professores (nome, email, password) VALUES (?, ?, ?)");
-                $stmt->bind_param("sss", $nome, $email, $hash);
-                if ($stmt->execute()) {
-                    $prof_id = $conn->insert_id;
+                if ($stmt->execute([$nome, $email, $hash])) {
+                    $prof_id = $conn->lastInsertId();
                     // Associar disciplinas
                     if (!empty($disciplinas)) {
                         $sd = $conn->prepare("INSERT INTO prof_disciplinas (professor_id, disciplina_id) VALUES (?, ?)");
                         foreach ($disciplinas as $did) {
-                            $sd->bind_param("ii", $prof_id, $did);
-                            $sd->execute();
+                            $sd->execute([$prof_id, (int)$did]);
                         }
                     }
                     $msg = "Professor \"$nome\" criado com sucesso.";
@@ -67,8 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $disciplinas  = $_POST['disciplinas'] ?? [];
 
         $stmt = $conn->prepare("UPDATE professores SET nome = ?, email = ? WHERE id = ?");
-        $stmt->bind_param("ssi", $nome, $email, $id);
-        $stmt->execute();
+        $stmt->execute([$nome, $email, $id]);
 
         // Atualizar password só se preenchida
         if (!empty($senha)) {
@@ -78,22 +74,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $hash = password_hash($senha, PASSWORD_BCRYPT);
                 $sp = $conn->prepare("UPDATE professores SET password = ? WHERE id = ?");
-                $sp->bind_param("si", $hash, $id);
-                $sp->execute();
+                $sp->execute([$hash, $id]);
             }
         }
 
         if ($msg_tipo !== 'erro') {
             // Recriar associações de disciplinas
             $del = $conn->prepare("DELETE FROM prof_disciplinas WHERE professor_id = ?");
-            $del->bind_param("i", $id);
-            $del->execute();
+            $del->execute([$id]);
 
             if (!empty($disciplinas)) {
                 $sd = $conn->prepare("INSERT INTO prof_disciplinas (professor_id, disciplina_id) VALUES (?, ?)");
                 foreach ($disciplinas as $did) {
-                    $sd->bind_param("ii", $id, $did);
-                    $sd->execute();
+                    $sd->execute([$id, (int)$did]);
                 }
             }
             $msg = "Professor atualizado com sucesso.";
@@ -104,18 +97,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ── ELIMINAR PROFESSOR
     if ($acao === 'eliminar') {
         $id = (int)$_POST['prof_id'];
-        $conn->prepare("DELETE FROM prof_disciplinas WHERE professor_id = ?")->bind_param("i", $id) && true;
         $del_pd = $conn->prepare("DELETE FROM prof_disciplinas WHERE professor_id = ?");
-        $del_pd->bind_param("i", $id); $del_pd->execute();
+        $del_pd->execute([$id]);
         $del_p = $conn->prepare("DELETE FROM professores WHERE id = ?");
-        $del_p->bind_param("i", $id);
-        $msg = $del_p->execute() ? "Professor eliminado." : "Erro ao eliminar.";
+        $msg = $del_p->execute([$id]) ? "Professor eliminado." : "Erro ao eliminar.";
         $msg_tipo = strpos($msg, 'Erro') === false ? "sucesso" : "erro";
     }
 }
 
 // ══ BUSCAR DADOS ══
-$professores = $conn->query("
+$professores_stmt = $conn->query("
     SELECT p.id, p.nome, p.email,
            GROUP_CONCAT(d.Nome_disc ORDER BY d.Nome_disc SEPARATOR '|||') AS disciplinas_nomes,
            GROUP_CONCAT(d.ID ORDER BY d.Nome_disc SEPARATOR ',') AS disciplinas_ids,
@@ -127,12 +118,12 @@ $professores = $conn->query("
     ORDER BY p.nome ASC
 ");
 
-$todas_disc = $conn->query("SELECT ID, Nome_disc FROM disciplinas ORDER BY Nome_disc ASC")->fetch_all(MYSQLI_ASSOC);
+$todas_disc = $conn->query("SELECT ID, Nome_disc FROM disciplinas ORDER BY Nome_disc ASC")->fetchAll();
 
 // Badges sidebar
-$total_cand   = $conn->query("SELECT COUNT(*) as n FROM candidaturas")->fetch_assoc()['n'];
-$total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()['n'];
-$total_profs  = $conn->query("SELECT COUNT(*) as n FROM professores")->fetch_assoc()['n'];
+$total_cand   = $conn->query("SELECT COUNT(*) as n FROM candidaturas")->fetchColumn();
+$total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetchColumn();
+$total_profs  = $conn->query("SELECT COUNT(*) as n FROM professores")->fetchColumn();
 ?>
 <!DOCTYPE html>
 <html lang="pt-PT">
@@ -302,7 +293,7 @@ $total_profs  = $conn->query("SELECT COUNT(*) as n FROM professores")->fetch_ass
     <!-- GRID DE PROFESSORES -->
     <div class="row g-4" id="profGrid">
 
-      <?php if ($professores->num_rows === 0): ?>
+      <?php if ($professores_stmt->rowCount() === 0): ?>
       <div class="col-12">
         <div class="empty-state">
           <i class="bi bi-person-workspace"></i>
@@ -311,7 +302,7 @@ $total_profs  = $conn->query("SELECT COUNT(*) as n FROM professores")->fetch_ass
       </div>
 
       <?php else:
-        while ($prof = $professores->fetch_assoc()):
+        while ($prof = $professores_stmt->fetch()):
           $initials = strtoupper(substr($prof['nome'], 0, 1) .
             (strpos($prof['nome'], ' ') !== false ? substr(strrchr($prof['nome'], ' '), 1, 1) : ''));
           $disc_nomes = $prof['disciplinas_nomes'] ? explode('|||', $prof['disciplinas_nomes']) : [];

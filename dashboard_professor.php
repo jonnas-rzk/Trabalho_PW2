@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 VALUES (?, ?, ?, ?, NOW())
                 ON DUPLICATE KEY UPDATE nota = ?, data_lancamento = NOW()
             ");
-            $stmt->bind_param("iidsd", $aluno_id, $disc_id, $nota, $epoca, $nota);
+            $stmt->execute([$aluno_id, $disc_id, $nota, $epoca, $nota]);
             $msg      = $stmt->execute() ? "Nota lançada com sucesso." : "Erro ao lançar nota.";
             $msg_tipo = $stmt->execute() ? "sucesso" : "erro";
             // Re-execute para obter resultado correto (bind já foi feito)
@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 VALUES (?, ?, ?, ?, NOW())
                 ON DUPLICATE KEY UPDATE nota = ?, data_lancamento = NOW()
             ");
-            $stmt->bind_param("iidsd", $aluno_id, $disc_id, $nota, $epoca, $nota);
+            $stmt->execute([$aluno_id, $disc_id, $nota, $epoca, $nota]);
             if ($stmt->execute()) {
                 $msg = "Nota de " . ucfirst($epoca) . " guardada.";
                 $msg_tipo = "sucesso";
@@ -73,8 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $epoca    = $_POST['epoca'] ?? 'normal';
 
         $stmt = $conn->prepare("DELETE FROM pautas WHERE aluno_id=? AND disciplina_id=? AND epoca=?");
-        $stmt->bind_param("iis", $aluno_id, $disc_id, $epoca);
-        $msg      = $stmt->execute() ? "Nota removida." : "Erro ao remover nota.";
+        $msg = $stmt->execute([$aluno_id, $disc_id, $epoca]) ? "Nota removida." : "Erro ao remover nota.";
         $msg_tipo = $stmt->execute() ? "sucesso" : "erro";
         $msg_tipo = "sucesso"; $msg = "Nota removida.";
     }
@@ -82,9 +81,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ══ BUSCAR DADOS DO PROFESSOR ══
 $stmt = $conn->prepare("SELECT id, nome, email FROM professores WHERE id = ?");
-$stmt->bind_param("i", $prof_id);
-$stmt->execute();
-$professor = $stmt->get_result()->fetch_assoc();
+$stmt->execute([$prof_id]);
+$professor = $stmt->fetch();
 
 if (!$professor) { session_destroy(); header("Location: login.php"); exit(); }
 
@@ -96,9 +94,8 @@ $stmt_disc = $conn->prepare("
     WHERE pd.professor_id = ?
     ORDER BY d.Nome_disc ASC
 ");
-$stmt_disc->bind_param("i", $prof_id);
-$stmt_disc->execute();
-$disciplinas = $stmt_disc->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmt_disc->execute([$prof_id]);
+$disciplinas = $stmt_disc->fetchAll();
 
 // ── Dados por disciplina
 $dados_disciplinas = [];
@@ -115,16 +112,14 @@ foreach ($disciplinas as $disc) {
         JOIN plano_estudos pe ON pe.CURSOS = a.curso_id AND pe.DISCIPLINA = ?
         ORDER BY a.nome ASC
     ");
-    $stmt_alunos->bind_param("i", $disc_id);
-    $stmt_alunos->execute();
-    $alunos = $stmt_alunos->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt_alunos->execute([$disc_id]);
+    $alunos = $stmt_alunos->fetchAll();
 
     // Todas as notas destes alunos nesta disciplina (todas épocas)
     $notas_map = [];
     if (!empty($alunos)) {
         $ids = array_column($alunos, 'id');
         $ph  = implode(',', array_fill(0, count($ids), '?'));
-        $types = str_repeat('i', count($ids)) . 'i';
         $params = array_merge($ids, [$disc_id]);
 
         $stmt_n = $conn->prepare("
@@ -132,9 +127,8 @@ foreach ($disciplinas as $disc) {
             FROM pautas
             WHERE aluno_id IN ($ph) AND disciplina_id = ?
         ");
-        $stmt_n->bind_param($types, ...$params);
-        $stmt_n->execute();
-        foreach ($stmt_n->get_result()->fetch_all(MYSQLI_ASSOC) as $nr) {
+        $stmt_n->execute($params);
+        foreach ($stmt_n->fetchAll() as $nr) {
             $notas_map[$nr['aluno_id']][$nr['epoca']] = $nr;
         }
     }

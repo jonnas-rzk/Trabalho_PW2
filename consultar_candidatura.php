@@ -13,39 +13,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $erro = "Preenche todos os campos.";
     } else {
 
-        // ── 1. Buscar candidatura por email de contacto + NIF
+        // ── 1. Buscar candidatura por email + NIF
         $stmt = $conn->prepare("
             SELECT nome, email, estado
             FROM candidaturas
             WHERE email = ? AND nif = ?
         ");
-        $stmt->bind_param("ss", $email, $nif);
-        $stmt->execute();
-        $res = $stmt->get_result();
+        $stmt->execute([$email, $nif]);
+        $resultado = $stmt->fetch();
 
-        if ($res->num_rows === 0) {
+        if (!$resultado) {
             $erro = "Dados não encontrados. Verifica o teu email e NIF.";
-        } else {
-            $resultado = $res->fetch_assoc();
+            $resultado = null;
+        } elseif ($resultado['estado'] === 'aprovado') {
 
-            // ── 2. Se aprovado, buscar número de aluno + password_temp da candidatura
-            if ($resultado['estado'] === 'aprovado') {
-                $stmt2 = $conn->prepare("
-                    SELECT a.numero_aluno, c.password_temp
-                    FROM candidaturas c
-                    JOIN alunos a ON a.nome = c.nome AND a.curso_id = c.curso_id
-                    WHERE c.email = ? AND c.nif = ?
-                    LIMIT 1
-                ");
-                $stmt2->bind_param("ss", $email, $nif);
-                $stmt2->execute();
-                $res2 = $stmt2->get_result();
+            // ── 2. Buscar número de aluno + password_temp
+            $stmt2 = $conn->prepare("
+                SELECT a.numero_aluno, c.password_temp
+                FROM candidaturas c
+                JOIN alunos a ON a.nome = c.nome AND a.curso_id = c.curso_id
+                WHERE c.email = ? AND c.nif = ?
+                LIMIT 1
+            ");
+            $stmt2->execute([$email, $nif]);
+            $row2 = $stmt2->fetch();
 
-                if ($res2->num_rows > 0) {
-                    $aluno_info = $res2->fetch_assoc();
-                    $aluno_info['email_institucional'] = "a" . $aluno_info['numero_aluno'] . "@alunos.ipca.pt";
-                    $aluno_info['password']            = $aluno_info['password_temp'] ?? null;
-                }
+            if ($row2) {
+                $aluno_info = $row2;
+                $aluno_info['email_institucional'] = "a" . $aluno_info['numero_aluno'] . "@alunos.ipca.pt";
+                $aluno_info['password']            = $aluno_info['password_temp'] ?? null;
             }
         }
     }
@@ -57,14 +53,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Consultar Candidatura — IPCA</title>
-
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/consultar_candidatura.css">
-
-
 </head>
 <body>
 
@@ -88,7 +81,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="page-wrap">
   <div class="card-wrap">
 
-    <!-- Cabeçalho -->
     <div class="page-header">
       <div class="page-badge">
         <i class="bi bi-search"></i>
@@ -101,12 +93,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </p>
     </div>
 
-    <!-- Card principal -->
     <div class="form-card">
 
-      <!-- Formulário -->
       <form method="POST" novalidate>
-
         <div class="mb-3">
           <label class="field-label">Email de Contacto</label>
           <div class="field-icon-wrap">
@@ -132,12 +121,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <button type="submit" class="btn-submit">
           <i class="bi bi-search"></i> Consultar Estado
         </button>
-
       </form>
 
-      <!-- ── RESULTADOS ── -->
+      <!-- RESULTADOS -->
       <?php if ($erro): ?>
-
         <hr class="divider">
         <div class="state-error">
           <div class="state-icon"><i class="bi bi-x-circle"></i></div>
@@ -148,12 +135,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
       <?php elseif ($resultado): ?>
-
         <hr class="divider">
 
         <?php if ($resultado['estado'] === 'pendente'): ?>
-
-          <!-- PENDENTE -->
           <div class="state-pending">
             <div class="state-icon"><i class="bi bi-hourglass-split"></i></div>
             <div style="flex:1;">
@@ -187,10 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </div>
 
         <?php elseif ($resultado['estado'] === 'aprovado' && $aluno_info): ?>
-
-          <!-- APROVADO -->
           <div class="state-approved">
-
             <div class="approved-header">
               <div class="approved-icon"><i class="bi bi-patch-check-fill"></i></div>
               <div>
@@ -200,7 +181,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
             <div class="cred-grid">
-
               <div class="cred-row">
                 <span class="cred-key">Nº de Processo</span>
                 <div class="d-flex align-items-center gap-2">
@@ -224,7 +204,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <div class="cred-row">
                 <span class="cred-key">Password Provisória</span>
                 <div class="d-flex align-items-center gap-2">
-                  <?php if ($aluno_info['password']): ?>
+                  <?php if (!empty($aluno_info['password'])): ?>
                     <span class="cred-val" id="pwd-val">••••••••••</span>
                     <button class="copy-btn" onclick="togglePassword()" title="Mostrar">
                       <i class="bi bi-eye" id="pwd-icon"></i>
@@ -236,7 +216,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   <?php endif; ?>
                 </div>
               </div>
-
             </div>
 
             <div class="approved-warning">
@@ -248,11 +227,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <i class="bi bi-box-arrow-in-right"></i>
               Entrar na Área do Aluno
             </a>
-
           </div>
 
         <?php elseif ($resultado['estado'] === 'rejeitado'): ?>
-
           <div class="state-error">
             <div class="state-icon"><i class="bi bi-x-circle-fill"></i></div>
             <div>
@@ -262,7 +239,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </div>
 
         <?php else: ?>
-
           <div class="state-error">
             <div class="state-icon"><i class="bi bi-exclamation-triangle"></i></div>
             <div>
@@ -270,7 +246,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <p>A candidatura foi aprovada mas os dados de acesso ainda não estão disponíveis. Aguarda alguns minutos.</p>
             </div>
           </div>
-
         <?php endif; ?>
 
       <?php endif; ?>
@@ -295,14 +270,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  const pwdPlain = <?php echo ($aluno_info && $aluno_info['password']) ? json_encode($aluno_info['password']) : 'null'; ?>;
+  const pwdPlain = <?php echo ($aluno_info && !empty($aluno_info['password'])) ? json_encode($aluno_info['password']) : 'null'; ?>;
   let pwdVisible = false;
 
   function togglePassword() {
     if (!pwdPlain) return;
     pwdVisible = !pwdVisible;
-    document.getElementById('pwd-val').textContent  = pwdVisible ? pwdPlain : '••••••••••';
-    document.getElementById('pwd-icon').className   = pwdVisible ? 'bi bi-eye-slash' : 'bi bi-eye';
+    document.getElementById('pwd-val').textContent = pwdVisible ? pwdPlain : '••••••••••';
+    document.getElementById('pwd-icon').className  = pwdVisible ? 'bi bi-eye-slash' : 'bi bi-eye';
   }
 
   function copiar(texto, btn) {

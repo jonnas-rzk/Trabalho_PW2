@@ -29,16 +29,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['foto'])) {
         if (move_uploaded_file($file['tmp_name'], $dest)) {
             // Apagar foto antiga se não for default
             $old = $conn->prepare("SELECT foto FROM alunos WHERE id=?");
-            $old->bind_param("i", $aluno_id);
-            $old->execute();
-            $old_foto = $old->get_result()->fetch_assoc()['foto'] ?? '';
+            $old->execute([$aluno_id]);
+            $old_foto = $old->fetchColumn() ?? '';
             if ($old_foto && $old_foto !== 'default.png' && file_exists('uploads/'.$old_foto)) {
                 unlink('uploads/'.$old_foto);
             }
 
             $upd = $conn->prepare("UPDATE alunos SET foto=? WHERE id=?");
-            $upd->bind_param("si", $filename, $aluno_id);
-            $upd->execute();
+            $upd->execute([$filename, $aluno_id]);
             $msg = "Foto atualizada com sucesso!"; $msg_tipo = "sucesso";
         } else {
             $msg = "Falha ao guardar o ficheiro."; $msg_tipo = "erro";
@@ -53,9 +51,8 @@ $stmt = $conn->prepare("
     LEFT JOIN cursos c ON a.curso_id = c.ID
     WHERE a.id = ?
 ");
-$stmt->bind_param("i", $aluno_id);
-$stmt->execute();
-$aluno = $stmt->get_result()->fetch_assoc();
+$stmt->execute([$aluno_id]);
+$aluno = $stmt->fetch();
 
 if (!$aluno) {
     session_destroy();
@@ -71,9 +68,8 @@ $stmt_disc = $conn->prepare("
     WHERE pe.CURSOS = ?
     ORDER BY d.Nome_disc ASC
 ");
-$stmt_disc->bind_param("i", $aluno['curso_id']);
-$stmt_disc->execute();
-$disciplinas = $stmt_disc->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmt_disc->execute([$aluno['curso_id']]);
+$disciplinas = $stmt_disc->fetchAll();
 
 // ══ BUSCAR PAUTAS DO ALUNO ══
 $stmt_pautas = $conn->prepare("
@@ -84,9 +80,8 @@ $stmt_pautas = $conn->prepare("
     WHERE p.aluno_id = ?
     ORDER BY d.Nome_disc ASC, p.epoca ASC
 ");
-$stmt_pautas->bind_param("i", $aluno_id);
-$stmt_pautas->execute();
-$pautas_raw = $stmt_pautas->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmt_pautas->execute([$aluno_id]);
+$pautas_raw = $stmt_pautas->fetchAll();
 
 // Organizar pautas por disciplina_id
 $pautas = [];

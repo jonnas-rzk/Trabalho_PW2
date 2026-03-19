@@ -29,26 +29,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_SESSION['tipo'] === 'admin') {
     if ($acao === 'rejeitar') {
         $obs = trim($_POST['observacoes'] ?? '');
         $stmt = $conn->prepare("UPDATE candidaturas SET estado='rejeitado', observacoes=?, data_decisao=NOW() WHERE id=?");
-        $stmt->bind_param("si", $obs, $id);
-        $msg      = $stmt->execute() ? "Candidatura rejeitada." : "Erro ao rejeitar.";
-        $msg_tipo = strpos($msg, 'Erro') === false ? "sucesso" : "erro";
+        $ok = $stmt->execute([$obs, $id]);
+        $msg = $ok ? "Candidatura rejeitada." : "Erro ao rejeitar.";
+        $msg_tipo = $ok ? "sucesso" : "erro";
     }
 
     // GUARDAR OBSERVAÇÕES
     if ($acao === 'observacoes') {
         $obs = trim($_POST['observacoes'] ?? '');
         $stmt = $conn->prepare("UPDATE candidaturas SET observacoes=? WHERE id=?");
-        $stmt->bind_param("si", $obs, $id);
-        $msg      = $stmt->execute() ? "Observações guardadas." : "Erro ao guardar.";
-        $msg_tipo = strpos($msg, 'Erro') === false ? "sucesso" : "erro";
+        $ok = $stmt->execute([$obs, $id]);
+        $msg = $ok ? "Observações guardadas." : "Erro ao guardar.";
+        $msg_tipo = $ok ? "sucesso" : "erro";
     }
 
     // REPOR PARA PENDENTE
     if ($acao === 'repor') {
         $stmt = $conn->prepare("UPDATE candidaturas SET estado='pendente', data_decisao=NULL WHERE id=?");
-        $stmt->bind_param("i", $id);
-        $msg      = $stmt->execute() ? "Candidatura reposta para pendente." : "Erro.";
-        $msg_tipo = strpos($msg, 'Erro') === false ? "sucesso" : "erro";
+        $ok = $stmt->execute([$id]);
+        $msg = $ok ? "Candidatura reposta para pendente." : "Erro.";
+        $msg_tipo = $ok ? "sucesso" : "erro";
     }
 }
 
@@ -59,9 +59,8 @@ $stmt = $conn->prepare("
     LEFT JOIN cursos cu ON c.curso_id = cu.ID
     WHERE c.id = ?
 ");
-$stmt->bind_param("i", $id);
-$stmt->execute();
-$cand = $stmt->get_result()->fetch_assoc();
+$stmt->execute([$id]);
+$cand = $stmt->fetch();
 
 if (!$cand) {
     header("Location: dashboard_admin.php?erro=nao_encontrada");
@@ -72,14 +71,13 @@ if (!$cand) {
 $aluno = null;
 if ($cand['estado'] === 'aprovado') {
     $stmt2 = $conn->prepare("SELECT numero_aluno, email FROM alunos WHERE nome = ? LIMIT 1");
-    $stmt2->bind_param("s", $cand['nome']);
-    $stmt2->execute();
-    $aluno = $stmt2->get_result()->fetch_assoc();
+    $stmt2->execute([$cand['nome']]);
+    $aluno = $stmt2->fetch();
 }
 
 // ── Sidebar badges
-$total_cand   = $conn->query("SELECT COUNT(*) as n FROM candidaturas")->fetch_assoc()['n'];
-$total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetch_assoc()['n'];
+$total_cand   = $conn->query("SELECT COUNT(*) as n FROM candidaturas")->fetchColumn();
+$total_alunos = $conn->query("SELECT COUNT(*) as n FROM alunos")->fetchColumn();
 
 // ── Helpers
 $estado       = $cand['estado'] ?? 'pendente';

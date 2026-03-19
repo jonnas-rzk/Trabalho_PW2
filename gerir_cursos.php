@@ -122,7 +122,9 @@ $cursos_result = $conn->query("
     ORDER BY c.Nome ASC
 ");
 
-$todas_disc   = $conn->query("SELECT ID, Nome_disc FROM disciplinas ORDER BY Nome_disc ASC")->fetchAll();
+$discs_result = $conn->query("SELECT ID, Nome_disc FROM disciplinas ORDER BY Nome_disc ASC");
+$todas_disc   = [];
+// PDO fetchAll below
 
 $plano_map  = [];
 $plano_rows = $conn->query("SELECT CURSOS, DISCIPLINA FROM plano_estudos");

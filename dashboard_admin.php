@@ -11,11 +11,12 @@ if (!isset($_SESSION['tipo']) || ($_SESSION['tipo'] !== 'admin' && $_SESSION['ti
     exit();
 }
 
-$sql = "SELECT c.*, cu.Nome as nome_curso 
+$stmt = $conn->query("SELECT c.*, cu.Nome as nome_curso 
         FROM candidaturas c 
         LEFT JOIN cursos cu ON c.curso_id = cu.ID 
-        ORDER BY c.data_submissao DESC";
-$result = $conn->query($sql);
+        ORDER BY c.data_submissao DESC");
+$candidaturas_all = $stmt->fetchAll();
+$total_candidaturas = count($candidaturas_all);
 ?>
 <!DOCTYPE html>
 <html lang="pt-PT">
@@ -181,7 +182,7 @@ $result = $conn->query($sql);
       <div class="col-6 col-md-3">
         <div class="stat-card" style="--card-color:#c9a84c; --card-rgb:201,168,76">
           <div class="stat-icon"><i class="bi bi-file-earmark-text"></i></div>
-          <div class="stat-value"><?php echo $result->num_rows; ?></div>
+          <div class="stat-value"><?php echo $total_candidaturas; ?></div>
           <div class="stat-label">Total Candidaturas</div>
           <div class="stat-delta" style="color:var(--muted);">
             <i class="bi bi-calendar3" style="font-size:11px;"></i> Este ano letivo
@@ -246,24 +247,18 @@ $result = $conn->query($sql);
             <option value="">Todos os cursos</option>
             <?php
               // Reset result pointer
-              if ($result->num_rows > 0) {
-                $result->data_seek(0);
-                $cursos_vistos = [];
-                while ($r = $result->fetch_assoc()) {
-                  if ($r['nome_curso'] && !in_array($r['nome_curso'], $cursos_vistos)) {
-                    $cursos_vistos[] = $r['nome_curso'];
-                    echo "<option value='" . htmlspecialchars($r['nome_curso']) . "'>" . htmlspecialchars($r['nome_curso']) . "</option>";
-                  }
+              $cursos_vistos = [];
+              foreach ($candidaturas_all as $r) {
+                if ($r['nome_curso'] && !in_array($r['nome_curso'], $cursos_vistos)) {
+                  $cursos_vistos[] = $r['nome_curso'];
+                  echo "<option value='" . htmlspecialchars($r['nome_curso']) . "'>" . htmlspecialchars($r['nome_curso']) . "</option>";
                 }
-                $result->data_seek(0);
               }
             ?>
           </select>
         </div>
         <div class="col-12 col-md-4 d-flex gap-2 justify-content-md-end">
-          <button class="btn-outline-g" onclick="exportarExcel()">
-            <i class="bi bi-download me-1"></i>Exportar
-          </button>
+         
           <?php if ($_SESSION['tipo'] === 'admin'): ?>
           <button class="btn-outline-d" onclick="confirmarLimpar()">
             <i class="bi bi-trash me-1"></i>Limpar
@@ -281,9 +276,7 @@ $result = $conn->query($sql);
           <div class="table-card-title">Lista de Candidatos</div>
           <div class="table-card-sub">Clica no <i class="bi bi-eye" style="color:var(--info)"></i> para ver a ficha completa</div>
         </div>
-        <a href="nova_candidatura.php" class="btn-gold">
-          <i class="bi bi-plus-lg me-1"></i>Nova Ficha
-        </a>
+        
       </div>
 
       <div class="table-responsive">
@@ -303,9 +296,8 @@ $result = $conn->query($sql);
             </tr>
           </thead>
           <tbody>
-            <?php if ($result->num_rows > 0):
-              $result->data_seek(0);
-              while ($row = $result->fetch_assoc()):
+            <?php if (!empty($candidaturas_all)):
+              foreach ($candidaturas_all as $row):
                 $status = $row['estado'] ?? 'pendente';
                 $initials = strtoupper(substr($row['nome'], 0, 1) . (strpos($row['nome'], ' ') !== false ? substr(strrchr($row['nome'], ' '), 1, 1) : ''));
             ?>
@@ -375,7 +367,7 @@ $result = $conn->query($sql);
               <?php endif; ?>
 
             </tr>
-            <?php endwhile; ?>
+            <?php endforeach; ?>
             <?php else: ?>
             <tr>
               <td colspan="8" class="text-center py-5" style="color:var(--muted);">
@@ -451,10 +443,7 @@ $result = $conn->query($sql);
     }
   }
 
-  // ── Exportar (placeholder)
-  function exportarExcel() {
-    window.location.href = 'exportar_candidaturas.php';
-  }
+
 
   // ── Fechar sidebar ao clicar fora (mobile)
   document.addEventListener('click', function(e) {

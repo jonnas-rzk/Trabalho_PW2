@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $stmt = $conn->prepare("UPDATE alunos SET nome=?, email=?, curso_id=? WHERE id=?");
         $ok = $stmt->execute([$nome, $email, $curso_id, $id]);
-        $msg      = $ok ? "Aluno atualizado com sucesso." : "Erro ao atualizar.";
+        $msg = $ok ? "Aluno atualizado com sucesso." : "Erro ao atualizar.";
         $msg_tipo = $ok ? "sucesso" : "erro";
     }
 
@@ -35,8 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ── Buscar todos os alunos com curso
-$alunos_stmt = $conn->query("
-    SELECT a.id, a.numero_aluno, a.nome, a.email, a.curso_id, a.foto,
+$alunos_q = $conn->query("
+    SELECT a.id, a.numero_aluno, a.nome, a.email, a.curso_id,
            c.Nome AS nome_curso
     FROM alunos a
     LEFT JOIN cursos c ON a.curso_id = c.ID
@@ -44,7 +44,9 @@ $alunos_stmt = $conn->query("
 ");
 
 // ── Buscar cursos para o select do modal de edição
-$lista_cursos = $conn->query("SELECT ID, Nome FROM cursos ORDER BY Nome ASC")->fetchAll();
+$cursos = $conn->query("SELECT ID, Nome FROM cursos ORDER BY Nome ASC");
+$lista_cursos = [];
+// done below
 
 // ── Total candidaturas (para badge sidebar)
 $total_cand = $conn->query("SELECT COUNT(*) as n FROM candidaturas")->fetchColumn();
@@ -76,21 +78,24 @@ $total_cand = $conn->query("SELECT COUNT(*) as n FROM candidaturas")->fetchColum
   <div class="sidebar-section">Principal</div>
   <a href="dashboard_admin.php" class="sidebar-link">
     <i class="bi bi-people"></i> Candidaturas
+    <span class="badge-count"><?php echo $total_cand; ?></span>
   </a>
-
-  <a href="lista_alunos.php" class="sidebar-link active">
+  <a href="alunos_ativos.php" class="sidebar-link active">
     <i class="bi bi-mortarboard"></i> Alunos Ativos
+    <span class="badge-count"><?php echo $alunos_q->rowCount(); ?></span>
   </a>
-
-  <a href="adicionar_curso.php" class="sidebar-link">
+  <a href="gerir_cursos.php" class="sidebar-link">
     <i class="bi bi-book"></i> Cursos
   </a>
-
-
+  <a href="plano.php" class="sidebar-link">
+    <i class="bi bi-journal-text"></i> Plano de Estudos
+  </a>
 
   <?php if ($_SESSION['tipo'] === 'admin'): ?>
   <div class="sidebar-section">Administração</div>
-  <a href="gerir_utilizadores.php" class="sidebar-link"><i class="bi bi-people-fill"></i> Utilizadores</a>
+  <a href="#" class="sidebar-link"><i class="bi bi-people-fill"></i> Utilizadores</a>
+  <a href="#" class="sidebar-link"><i class="bi bi-bar-chart"></i> Relatórios</a>
+  <a href="#" class="sidebar-link"><i class="bi bi-gear"></i> Definições</a>
   <?php endif; ?>
 
   <div class="sidebar-bottom">
@@ -122,15 +127,14 @@ $total_cand = $conn->query("SELECT COUNT(*) as n FROM candidaturas")->fetchColum
         <div class="topbar-breadcrumb">IPCA › <span>Admin</span> › Alunos</div>
       </div>
     </div>
-
     <div class="topbar-actions">
+      <div class="topbar-badge"><i class="bi bi-bell"></i><span class="dot"></span></div>
       <div class="session-pill">
         <div class="session-dot"></div>
-        <span style="font-size:12px; color:var(--gold); font-weight:500;">Sessão Ativa</span>
+        <span style="font-size:12px;color:var(--gold);font-weight:500;">Sessão Ativa</span>
       </div>
     </div>
   </div>
-
 
   <!-- TOAST -->
   <?php if ($msg): ?>
@@ -151,7 +155,7 @@ $total_cand = $conn->query("SELECT COUNT(*) as n FROM candidaturas")->fetchColum
       <div class="col-6 col-md-3">
         <div class="stat-card" style="--card-color:#c9a84c;--card-rgb:201,168,76">
           <div class="stat-icon"><i class="bi bi-mortarboard"></i></div>
-          <div class="stat-value"><?php echo $alunos_stmt->rowCount(); ?></div>
+          <div class="stat-value"><?php echo $alunos_q->rowCount(); ?></div>
           <div class="stat-label">Total Alunos</div>
         </div>
       </div>
@@ -197,7 +201,13 @@ $total_cand = $conn->query("SELECT COUNT(*) as n FROM candidaturas")->fetchColum
             <option value="sem curso">Sem curso</option>
           </select>
         </div>
-      
+        <div class="col-6 col-md-4 d-flex gap-2 justify-content-md-end">
+          <?php if ($_SESSION['tipo'] === 'admin'): ?>
+          <button class="btn-outline-g" onclick="exportar()">
+            <i class="bi bi-download me-1"></i>Exportar
+          </button>
+          <?php endif; ?>
+        </div>
       </div>
     </div>
 
@@ -225,8 +235,9 @@ $total_cand = $conn->query("SELECT COUNT(*) as n FROM candidaturas")->fetchColum
             </tr>
           </thead>
           <tbody>
-            <?php if ($alunos_stmt->rowCount() > 0):
-              foreach ($alunos_stmt->fetchAll() as $row):
+            <?php if ($alunos_q->rowCount() > 0):
+              $alunos_all = $alunos_q->fetchAll();
+              foreach ($alunos_all as $row):
                 $initials = strtoupper(substr($row['nome'] ?? 'A', 0, 1) .
                   (strpos($row['nome'], ' ') !== false ? substr(strrchr($row['nome'], ' '), 1, 1) : ''));
             ?>
@@ -235,15 +246,9 @@ $total_cand = $conn->query("SELECT COUNT(*) as n FROM candidaturas")->fetchColum
                 data-email="<?php echo strtolower($row['email'] ?? ''); ?>"
                 data-curso="<?php echo htmlspecialchars($row['nome_curso'] ?? 'sem curso'); ?>">
 
-                
-            <td>
-                <?php if (!empty($row['foto']) && file_exists("uploads/" . $row['foto'])): ?>
-                    <img src="uploads/<?php echo $row['foto']; ?>" 
-                        style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid var(--gold);">
-                <?php else: ?>
-                    <div class="student-initials"><?php echo $initials; ?></div>
-                <?php endif; ?>
-            </td>
+              <td>
+                <div class="student-initials"><?php echo $initials; ?></div>
+              </td>
 
               <td>
                 <div style="font-weight:500;color:var(--cream);"><?php echo htmlspecialchars($row['nome']); ?></div>
